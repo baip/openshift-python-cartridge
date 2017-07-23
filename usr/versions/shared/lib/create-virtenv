@@ -2,27 +2,38 @@
 
 # Utility function to create virtual environments
 
+venv_dir=$OPENSHIFT_PYTHON_DIR/virtenv/venv
+
 function relative-virtenv {
-    # Clean the lib64->lib symlink
-    virtualenv --quiet --never-download --relocatable $OPENSHIFT_PYTHON_DIR/virtenv
-    # symlinks -r -c -s $OPENSHIFT_PYTHON_DIR/virtenv >/dev/null
+  pushd "$venv_dir" > /dev/null
+
+  vdir=$(cd "${venv_dir}" && pwd)
+  for zf in $(grep -l -r "#\!$vdir/venv/bin/" . ); do
+    sed --follow-symlinks -i "s;#\!$vdir/venv/bin/;#\!/usr/bin/env ;" "$zf"
+  done
+
+  popd > /dev/null
 }
 
 function create-virtenv {
-    # Initialize the virtual environment
-    mkdir -p $OPENSHIFT_PYTHON_DIR/virtenv
-    mkdir -p $OPENSHIFT_PYTHON_DIR/virtenv/.python-eggs/
-    virtualenv --quiet --never-download --system-site-packages $OPENSHIFT_PYTHON_DIR/virtenv
+  if [ ! -d "$venv_dir" ]  ||  ! $(ls "$venv_dir" > /dev/null 2>&1); then
+    python3 -m venv --system-site-packages --clear --without-pip $venv_dir
+  fi
 
-    # Bug 995284
-    versions=( $(python -c 'import sys; print "%d %d.%d" % (sys.version_info[0], sys.version_info[0], sys.version_info[1])') )
-    for vers in "${versions[@]}"; do
-        [ -L $OPENSHIFT_PYTHON_DIR/virtenv/bin/python$vers ] || ln -s python $OPENSHIFT_PYTHON_DIR/virtenv/bin/python$vers
-    done
+  if ! $(ls $venv_dir/bin/pip > /dev/null 2>&1); then
+    install_pip
+  fi
 
-    relative-virtenv
+  relative-virtenv
+}
+
+function install_pip() {
+  pushd "$venv_dir/bin" > /dev/null
+  \cp $OPENSHIFT_PYTHON_DIR/conda/bin/pip .
+  \sed -r -i "1s;.*;#!$PWD/python;" pip
+  popd > /dev/null
 }
 
 function activate-virtenv {
-    source $OPENSHIFT_PYTHON_DIR/virtenv/bin/activate
+  source $venv_dir/bin/activate
 }

@@ -1,10 +1,14 @@
 #!/bin/bash
 
 # Utility function to update cartridge configuration
+function update-configuration() {
+  env_dir="${OPENSHIFT_PYTHON_DIR}/env"
+  # conda_prefix=$(conda info|\gawk '/default environment/{print $4}')
+  conda_prefix=$CONDA_PREFIX
+  conda_env=$CONDA_DEFAULT_ENV
 
-function update-configuration {
-    # Native installations of python
-    echo "${OPENSHIFT_PYTHON_DIR}virtenv/bin:${OPENSHIFT_PYTHON_DIR}bin" > ${OPENSHIFT_PYTHON_DIR}/env/OPENSHIFT_PYTHON_PATH_ELEMENT
-    echo "${OPENSHIFT_PYTHON_DIR}virtenv" > ${OPENSHIFT_PYTHON_DIR}/env/VIRTUAL_ENV
+  echo "${OPENSHIFT_PYTHON_DIR}virtenv/venv/bin:${OPENSHIFT_PYTHON_DIR}bin:${conda_prefix}/bin" > ${env_dir}/OPENSHIFT_PYTHON_PATH_ELEMENT
+  echo "${OPENSHIFT_PYTHON_DIR}virtenv/venv" > ${env_dir}/VIRTUAL_ENV
+  echo "${conda_prefix}" > ${env_dir}/CONDA_PREFIX
+  echo "${conda_env}" > ${env_dir}/CONDA_DEFAULT_ENV
 }
-

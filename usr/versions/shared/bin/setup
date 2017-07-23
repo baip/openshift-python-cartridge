@@ -2,6 +2,53 @@
 
 version="$1"
 
+if [ $version == '2.6' ]; then
+  :
+elif [ $version == '2.7' ]; then
+  :
+elif [ $version == '3.3' ]; then
+  :
+else
+  set +u
+  pushd $OPENSHIFT_PYTHON_DIR
+
+  if [[ -d /usr/lib64 ]]; then
+    conda_url='https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh'
+  else
+    conda_url='https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86.sh'
+  fi
+  conda_dir="${OPENSHIFT_PYTHON_DIR}conda"
+  \curl -O "$conda_url" && bash Miniconda3-latest-Linux-x86*.sh -b -p "$conda_dir"
+  \rm -f Miniconda3-latest-Linux-x86*.sh
+
+  source ${conda_dir}/bin/activate root
+  conda install -y python=$version
+  conda clean -y --all
+
+  pip install mod_wsgi || :
+
+  mod_wsgi_dir=$(\find ${OPENSHIFT_PYTHON_DIR}conda/lib -iname "mod_wsgi*.so")
+  echo "LoadModule wsgi_module     ${mod_wsgi_dir}" > $OPENSHIFT_PYTHON_DIR/usr/versions/$version/etc/conf.d/wsgi.conf
+
+  httpd_path=$(\find ${OPENSHIFT_PYTHON_DIR}conda/lib -iname "httpd")
+  \sed -i -e "s#/usr/sbin/httpd#$httpd_path#" $OPENSHIFT_PYTHON_DIR/usr/versions/$version/bin/control
+
+  apache_dir="$(dirname $(dirname $httpd_path))"
+  \sed -r -i -e "s#Include /etc/httpd/conf.modules.d/00-mpm.conf#LoadModule mpm_event_module 'modules/mod_mpm_event.so'#" \
+       -e 's;^#?( *LoadModule mime_magic_module modules/mod_mime_magic.so);#\1;' \
+       $OPENSHIFT_PYTHON_DIR/usr/versions/$version/etc/conf/httpd*.conf
+
+  \ln -sf $apache_dir/modules $OPENSHIFT_PYTHON_DIR/
+  \ln -sf $apache_dir/conf/magic ${OPENSHIFT_PYTHON_DIR}etc/magic
+
+  mod_wsgi_packages="$(dirname $apache_dir)"
+  echo "${mod_wsgi_packages}/apr-util/lib:${mod_wsgi_packages}/apr/lib" > ${OPENSHIFT_PYTHON_DIR}/env/OPENSHIFT_PYTHON_LD_LIBRARY_PATH_ELEMENT
+fi
+
+# Update environment
+source ${OPENSHIFT_PYTHON_DIR}usr/versions/${version}/lib/update-configuration
+update-configuration
+
 # Copy the version specific files to python directory
 shopt -s dotglob
 cp -rf $OPENSHIFT_PYTHON_DIR/usr/versions/$version/etc/* $OPENSHIFT_PYTHON_DIR/etc
@@ -14,3 +61,12 @@ echo > $OPENSHIFT_PYTHON_DIR/etc/conf.d/server-status.conf
 
 cp -f $OPENSHIFT_PYTHON_DIR/usr/versions/$version/etc/conf.d/performance.conf.erb $OPENSHIFT_PYTHON_DIR/conf/performance.conf.erb
 cp -f $OPENSHIFT_PYTHON_DIR/conf/performance.conf.erb $OPENSHIFT_PYTHON_DIR/conf/performance.conf.erb.hidden
+
+# The virtual environment is assumed to exist going forward
+if [ ! -f ${OPENSHIFT_PYTHON_DIR}virtenv/bin/python ]; then
+    source ${OPENSHIFT_PYTHON_DIR}usr/versions/${version}/lib/python-context
+    python-context-stdin <<EOF
+source ${OPENSHIFT_PYTHON_DIR}usr/versions/${version}/lib/create-virtenv
+create-virtenv
+EOF
+fi

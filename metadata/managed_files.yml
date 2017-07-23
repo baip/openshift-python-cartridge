@@ -1,14 +1,10 @@
 ---
 locked_files:
 - bin/
-- bin/*
 - etc/
 - etc/conf/
-- etc/conf/*
 - etc/conf.d/
-- etc/conf.d/wsgi.conf
 - hooks/
-- hooks/*
 - metadata/
 - metadata/*
 - conf/

@@ -1,0 +1,1 @@
+../../shared/template/wsgi2.py
